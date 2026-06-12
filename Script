@@ -1,1 +1,202 @@
+-- ====================== BRAINROT HUB (AUTO DROP + AUTO COLLECT) ======================
+-- Основа: Orion Library
+-- Функции: Авто-дроп шаров, авто-сбор денег
 
+-- Загрузка Orion
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
+
+-- Создание окна
+local Window = OrionLib:MakeWindow({
+    Name = "🧠 BRAINROT HUB",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "BrainrotHub",
+    IntroEnabled = true,
+    IntroText = "Loading Brainrot Hub...",
+    IntroIcon = "rbxassetid://4483345998"
+})
+
+-- Получение сервисов
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local vim = game:GetService("VirtualInputManager")
+local runService = game:GetService("RunService")
+
+-- Функция эмуляции тапа
+local function tap(x, y)
+    pcall(function()
+        vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
+        task.wait(0.02)
+        vim:SendMouseButtonEvent(x, y, 0, false, game, 0)
+    end)
+end
+
+-- Функция поиска кнопки по имени и тексту
+local function findButton(buttonName, buttonText)
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return nil end
+    
+    local function search(container)
+        for _, child in ipairs(container:GetChildren()) do
+            if child:IsA("TextButton") or child:IsA("ImageButton") then
+                if child.Name == buttonName then
+                    return child
+                end
+                if buttonText and child.Text and child.Text:find(buttonText) then
+                    return child
+                end
+            end
+            local found = search(child)
+            if found then return found end
+        end
+        return nil
+    end
+    
+    return search(playerGui)
+end
+
+-- Функция нажатия на кнопку по имени
+local function clickButton(buttonName, buttonText)
+    local btn = findButton(buttonName, buttonText)
+    if btn then
+        local pos = btn.AbsolutePosition
+        local size = btn.AbsoluteSize
+        if pos.X > 0 and pos.Y > 0 then
+            tap(pos.X + size.X/2, pos.Y + size.Y/2)
+            return true
+        end
+    end
+    return false
+end
+
+-- ====================== ВКЛАДКА "AUTO" ======================
+local AutoTab = Window:MakeTab({
+    Name = "🤖 Auto",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+-- ПЕРЕМЕННЫЕ
+local autoDrop = false
+local autoCollect = false
+local dropAmount = "250" -- "100", "250", "500", "1000"
+local dropCooldown = 1
+
+-- АВТО-ДРОП ШАРОВ
+AutoTab:AddToggle({
+    Name = "Auto Drop Balls 🎾",
+    Default = false,
+    Callback = function(Value)
+        autoDrop = Value
+    end
+})
+
+-- ВЫБОР КОЛИЧЕСТВА ДЛЯ ДРОПА
+AutoTab:AddDropdown({
+    Name = "Drop Amount",
+    Default = "250",
+    Options = {"100", "250", "500", "1000"},
+    Callback = function(Value)
+        dropAmount = Value
+    end
+})
+
+-- АВТО-СБОР ДЕНЕГ (или других ресурсов)
+AutoTab:AddToggle({
+    Name = "Auto Collect 💰",
+    Default = false,
+    Callback = function(Value)
+        autoCollect = Value
+    end
+})
+
+-- ====================== ВКЛАДКА "UTILS" ======================
+local UtilsTab = Window:MakeTab({
+    Name = "🛠️ Utils",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+-- КНОПКА ДЛЯ РУЧНОГО ДРОПА
+UtilsTab:AddButton({
+    Name = "Drop Balls (Manual)",
+    Callback = function()
+        clickButton("DropButton", "") or clickButton("Drop250", "250")
+    end
+})
+
+-- КНОПКА ДЛЯ РУЧНОГО СБОРА
+UtilsTab:AddButton({
+    Name = "Collect (Manual)",
+    Callback = function()
+        clickButton("QuickStack", "") or clickButton("EquipBest", "")
+    end
+})
+
+-- КНОПКА ДЛЯ РЕБЁРТА
+UtilsTab:AddButton({
+    Name = "Rebirth 🔄",
+    Callback = function()
+        clickButton("Rebirth", "")
+    end
+})
+
+-- КНОПКА ДЛЯ МАГАЗИНА
+UtilsTab:AddButton({
+    Name = "Open Store 🛒",
+    Callback = function()
+        clickButton("Store", "")
+    end
+})
+
+-- ====================== ОСНОВНЫЕ ЦИКЛЫ ======================
+
+-- АВТО-ДРОП (каждые dropCooldown секунд)
+task.spawn(function()
+    while true do
+        task.wait(dropCooldown)
+        if autoDrop then
+            -- Пробуем разные кнопки дропа
+            local dropped = false
+            if dropAmount == "100" then
+                dropped = clickButton("Drop100", "100")
+            elseif dropAmount == "250" then
+                dropped = clickButton("Drop250", "250")
+            elseif dropAmount == "500" then
+                dropped = clickButton("Drop500", "500")
+            elseif dropAmount == "1000" then
+                dropped = clickButton("Drop1000", "1000")
+            end
+            
+            -- Если не нашли кнопку с точным количеством, пробуем DropButton
+            if not dropped then
+                clickButton("DropButton", "")
+            end
+        end
+    end
+end)
+
+-- АВТО-СБОР
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if autoCollect then
+            -- Пробуем QuickStack (обычно собирает деньги/ресурсы)
+            local collected = clickButton("QuickStack", "")
+            if not collected then
+                clickButton("EquipBest", "")
+            end
+        end
+    end
+end)
+
+-- ====================== УВЕДОМЛЕНИЕ ======================
+OrionLib:MakeNotification({
+    Name = "🧠 Brainrot Hub",
+    Content = "Loaded! Auto Drop + Auto Collect ready.",
+    Image = "rbxassetid://4483345998",
+    Time = 5
+})
+
+-- Завершение инициализации (ОБЯЗАТЕЛЬНО!)
+OrionLib:Init()
