@@ -1,28 +1,15 @@
--- ====================== BRAINROT HUB (AUTO DROP + AUTO COLLECT) ======================
--- Основа: Orion Library
--- Функции: Авто-дроп шаров, авто-сбор денег
-
--- Загрузка Orion
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
-
--- Создание окна
-local Window = OrionLib:MakeWindow({
-    Name = "🧠 BRAINROT HUB",
-    HidePremium = false,
-    SaveConfig = true,
-    ConfigFolder = "BrainrotHub",
-    IntroEnabled = true,
-    IntroText = "Loading Brainrot Hub...",
-    IntroIcon = "rbxassetid://4483345998"
-})
-
--- Получение сервисов
+-- ====================== BRAINROT HUB (AUTO DROP 1 BALL + AUTO COLLECT) ======================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local vim = game:GetService("VirtualInputManager")
-local runService = game:GetService("RunService")
 
--- Функция эмуляции тапа
+-- ПЕРЕМЕННЫЕ
+local autoDrop = false
+local autoCollect = false
+local dropDelay = 0.3  -- задержка между дропами (сек)
+local collectDelay = 0.5
+
+-- ФУНКЦИЯ ТАПА
 local function tap(x, y)
     pcall(function()
         vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
@@ -31,146 +18,221 @@ local function tap(x, y)
     end)
 end
 
--- Функция поиска кнопки по имени и тексту
+-- ПОИСК КНОПКИ ПО ИМЕНИ ИЛИ ТЕКСТУ
 local function findButton(buttonName, buttonText)
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return nil end
+    if not playerGui then return nil, 0, 0 end
     
     local function search(container)
         for _, child in ipairs(container:GetChildren()) do
             if child:IsA("TextButton") or child:IsA("ImageButton") then
                 if child.Name == buttonName then
-                    return child
+                    local pos = child.AbsolutePosition
+                    local size = child.AbsoluteSize
+                    if pos.X > 0 and pos.Y > 0 then
+                        return child, pos.X + size.X/2, pos.Y + size.Y/2
+                    end
                 end
                 if buttonText and child.Text and child.Text:find(buttonText) then
-                    return child
+                    local pos = child.AbsolutePosition
+                    local size = child.AbsoluteSize
+                    if pos.X > 0 and pos.Y > 0 then
+                        return child, pos.X + size.X/2, pos.Y + size.Y/2
+                    end
                 end
             end
-            local found = search(child)
-            if found then return found end
+            local found, x, y = search(child)
+            if found then return found, x, y end
         end
-        return nil
+        return nil, 0, 0
     end
     
     return search(playerGui)
 end
 
--- Функция нажатия на кнопку по имени
+-- НАЖАТИЕ НА КНОПКУ
 local function clickButton(buttonName, buttonText)
-    local btn = findButton(buttonName, buttonText)
-    if btn then
-        local pos = btn.AbsolutePosition
-        local size = btn.AbsoluteSize
-        if pos.X > 0 and pos.Y > 0 then
-            tap(pos.X + size.X/2, pos.Y + size.Y/2)
-            return true
-        end
+    local btn, x, y = findButton(buttonName, buttonText)
+    if btn and x > 0 and y > 0 then
+        tap(x, y)
+        return true
     end
     return false
 end
 
--- ====================== ВКЛАДКА "AUTO" ======================
-local AutoTab = Window:MakeTab({
-    Name = "🤖 Auto",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
--- ПЕРЕМЕННЫЕ
-local autoDrop = false
-local autoCollect = false
-local dropAmount = "250" -- "100", "250", "500", "1000"
-local dropCooldown = 1
-
--- АВТО-ДРОП ШАРОВ
-AutoTab:AddToggle({
-    Name = "Auto Drop Balls 🎾",
-    Default = false,
-    Callback = function(Value)
-        autoDrop = Value
+-- ДИАГНОСТИКА: найти все кнопки дропа
+local function findDropButtons()
+    print("🔍 ПОИСК КНОПОК ДРОПА...")
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then print("PlayerGui не найден") return end
+    
+    local function search(container, path)
+        for _, child in ipairs(container:GetChildren()) do
+            if child:IsA("TextButton") or child:IsA("ImageButton") then
+                local text = child.Text or ""
+                if text:lower():find("drop") or text:lower():find("ball") or child.Name:lower():find("drop") then
+                    print("🔘 Найдена: " .. child.Name .. " | Текст: " .. text .. " | Путь: " .. path .. "." .. child.Name)
+                end
+            end
+            search(child, path .. "." .. child.Name)
+        end
     end
-})
+    search(playerGui, "PlayerGui")
+end
 
--- ВЫБОР КОЛИЧЕСТВА ДЛЯ ДРОПА
-AutoTab:AddDropdown({
-    Name = "Drop Amount",
-    Default = "250",
-    Options = {"100", "250", "500", "1000"},
-    Callback = function(Value)
-        dropAmount = Value
+-- ====================== СОЗДАНИЕ GUI ======================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BrainrotHub"
+screenGui.ResetOnSpawn = false
+
+-- ОСНОВНОЕ ОКНО
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 250, 0, 180)
+mainFrame.Position = UDim2.new(0.5, -125, 0.5, -90)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BackgroundTransparency = 0.1
+mainFrame.BorderSizePixel = 0
+
+-- СКРУГЛЕНИЕ
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+
+-- ЗАГОЛОВОК
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 35)
+title.Text = "🧠 BRAINROT HUB"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+
+-- КНОПКА ЗАКРЫТИЯ
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -35, 0, 2)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.Font = Enum.Font.GothamBold
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeBtn
+
+-- ПЕРЕТАСКИВАНИЕ ОКНА
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
     end
-})
+end)
 
--- АВТО-СБОР ДЕНЕГ (или других ресурсов)
-AutoTab:AddToggle({
-    Name = "Auto Collect 💰",
-    Default = false,
-    Callback = function(Value)
-        autoCollect = Value
+title.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
     end
-})
+end)
 
--- ====================== ВКЛАДКА "UTILS" ======================
-local UtilsTab = Window:MakeTab({
-    Name = "🛠️ Utils",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
--- КНОПКА ДЛЯ РУЧНОГО ДРОПА
-UtilsTab:AddButton({
-    Name = "Drop Balls (Manual)",
-    Callback = function()
-        clickButton("DropButton", "") or clickButton("Drop250", "250")
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
-})
+end)
 
--- КНОПКА ДЛЯ РУЧНОГО СБОРА
-UtilsTab:AddButton({
-    Name = "Collect (Manual)",
-    Callback = function()
-        clickButton("QuickStack", "") or clickButton("EquipBest", "")
-    end
-})
+-- КНОПКИ
+local btnDrop = Instance.new("TextButton")
+btnDrop.Size = UDim2.new(0, 220, 0, 40)
+btnDrop.Position = UDim2.new(0.5, -110, 0, 45)
+btnDrop.Text = "🔴 AUTO DROP (1 BALL): OFF"
+btnDrop.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+btnDrop.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnDrop.Font = Enum.Font.Gotham
 
--- КНОПКА ДЛЯ РЕБЁРТА
-UtilsTab:AddButton({
-    Name = "Rebirth 🔄",
-    Callback = function()
-        clickButton("Rebirth", "")
-    end
-})
+local dropCorner = Instance.new("UICorner")
+dropCorner.CornerRadius = UDim.new(0, 8)
+dropCorner.Parent = btnDrop
 
--- КНОПКА ДЛЯ МАГАЗИНА
-UtilsTab:AddButton({
-    Name = "Open Store 🛒",
-    Callback = function()
-        clickButton("Store", "")
+local btnCollect = Instance.new("TextButton")
+btnCollect.Size = UDim2.new(0, 220, 0, 40)
+btnCollect.Position = UDim2.new(0.5, -110, 0, 95)
+btnCollect.Text = "🔴 AUTO COLLECT: OFF"
+btnCollect.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+btnCollect.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnCollect.Font = Enum.Font.Gotham
+
+local collectCorner = Instance.new("UICorner")
+collectCorner.CornerRadius = UDim.new(0, 8)
+collectCorner.Parent = btnCollect
+
+local btnDiag = Instance.new("TextButton")
+btnDiag.Size = UDim2.new(0, 220, 0, 30)
+btnDiag.Position = UDim2.new(0.5, -110, 0, 145)
+btnDiag.Text = "🔍 FIND DROP BUTTONS"
+btnDiag.BackgroundColor3 = Color3.fromRGB(80, 80, 120)
+btnDiag.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnDiag.Font = Enum.Font.Gotham
+btnDiag.TextSize = 12
+
+local diagCorner = Instance.new("UICorner")
+diagCorner.CornerRadius = UDim.new(0, 8)
+diagCorner.Parent = btnDiag
+
+-- ЛОГИКА КНОПОК
+btnDrop.MouseButton1Click:Connect(function()
+    autoDrop = not autoDrop
+    if autoDrop then
+        btnDrop.Text = "🟢 AUTO DROP (1 BALL): ON"
+        btnDrop.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        btnDrop.Text = "🔴 AUTO DROP (1 BALL): OFF"
+        btnDrop.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     end
-})
+end)
+
+btnCollect.MouseButton1Click:Connect(function()
+    autoCollect = not autoCollect
+    if autoCollect then
+        btnCollect.Text = "🟢 AUTO COLLECT: ON"
+        btnCollect.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        btnCollect.Text = "🔴 AUTO COLLECT: OFF"
+        btnCollect.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    end
+end)
+
+btnDiag.MouseButton1Click:Connect(function()
+    findDropButtons()
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- СБОРКА GUI
+for _, obj in ipairs({mainFrame, title, closeBtn, btnDrop, btnCollect, btnDiag}) do
+    obj.Parent = screenGui
+end
+mainFrame.Parent = screenGui
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ====================== ОСНОВНЫЕ ЦИКЛЫ ======================
 
--- АВТО-ДРОП (каждые dropCooldown секунд)
+-- АВТО-ДРОП (по 1 шару)
 task.spawn(function()
     while true do
-        task.wait(dropCooldown)
+        task.wait(dropDelay)
         if autoDrop then
-            -- Пробуем разные кнопки дропа
-            local dropped = false
-            if dropAmount == "100" then
-                dropped = clickButton("Drop100", "100")
-            elseif dropAmount == "250" then
-                dropped = clickButton("Drop250", "250")
-            elseif dropAmount == "500" then
-                dropped = clickButton("Drop500", "500")
-            elseif dropAmount == "1000" then
-                dropped = clickButton("Drop1000", "1000")
-            end
-            
-            -- Если не нашли кнопку с точным количеством, пробуем DropButton
-            if not dropped then
-                clickButton("DropButton", "")
+            -- Ищем кнопку DropButton или любую кнопку с текстом "Drop"
+            local clicked = clickButton("DropButton", "")
+            if not clicked then
+                clickButton("", "Drop")
             end
         end
     end
@@ -179,24 +241,15 @@ end)
 -- АВТО-СБОР
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(collectDelay)
         if autoCollect then
-            -- Пробуем QuickStack (обычно собирает деньги/ресурсы)
-            local collected = clickButton("QuickStack", "")
-            if not collected then
+            -- Пробуем QuickStack (сбор ресурсов)
+            local clicked = clickButton("QuickStack", "")
+            if not clicked then
                 clickButton("EquipBest", "")
             end
         end
     end
 end)
 
--- ====================== УВЕДОМЛЕНИЕ ======================
-OrionLib:MakeNotification({
-    Name = "🧠 Brainrot Hub",
-    Content = "Loaded! Auto Drop + Auto Collect ready.",
-    Image = "rbxassetid://4483345998",
-    Time = 5
-})
-
--- Завершение инициализации (ОБЯЗАТЕЛЬНО!)
-OrionLib:Init()
+print("✅ Brainrot Hub загружен! Нажми на кнопку 'FIND DROP BUTTONS' для поиска кнопок дропа")
