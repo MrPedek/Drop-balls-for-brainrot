@@ -1,15 +1,33 @@
--- ====================== BRAINROT HUB (AUTO DROP 1 BALL + AUTO COLLECT) ======================
+-- ====================== BRAINROT HUB (AUTO DROP VIA REMOTE + AUTO COLLECT) ======================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- ПОИСК РЕМУТА ДЛЯ ДРОПА
+local dropRemote = nil
+local remotes = ReplicatedStorage:FindFirstChild("RemoteEvents")
+if remotes then
+    for _, child in ipairs(remotes:GetChildren()) do
+        if child.Name:find("Drop") or child.Name:find("Ball") then
+            dropRemote = child
+            print("🔍 Найден ремут для дропа:", child.Name)
+        end
+    end
+end
+
+-- Если не нашли ремут, используем эмуляцию кнопки (запасной вариант)
+local function dropBallViaRemote()
+    if dropRemote then
+        pcall(function()
+            dropRemote:FireServer()
+        end)
+        return true
+    end
+    return false
+end
+
+-- ЭМУЛЯЦИЯ ТАПА (запасной вариант)
 local vim = game:GetService("VirtualInputManager")
-
--- ПЕРЕМЕННЫЕ
-local autoDrop = false
-local autoCollect = false
-local dropDelay = 0.3  -- задержка между дропами (сек)
-local collectDelay = 0.5
-
--- ФУНКЦИЯ ТАПА
 local function tap(x, y)
     pcall(function()
         vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
@@ -18,27 +36,18 @@ local function tap(x, y)
     end)
 end
 
--- ПОИСК КНОПКИ ПО ИМЕНИ ИЛИ ТЕКСТУ
-local function findButton(buttonName, buttonText)
+-- ПОИСК КНОПКИ ПО ИМЕНИ
+local function findButton(buttonName)
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     if not playerGui then return nil, 0, 0 end
     
     local function search(container)
         for _, child in ipairs(container:GetChildren()) do
-            if child:IsA("TextButton") or child:IsA("ImageButton") then
-                if child.Name == buttonName then
-                    local pos = child.AbsolutePosition
-                    local size = child.AbsoluteSize
-                    if pos.X > 0 and pos.Y > 0 then
-                        return child, pos.X + size.X/2, pos.Y + size.Y/2
-                    end
-                end
-                if buttonText and child.Text and child.Text:find(buttonText) then
-                    local pos = child.AbsolutePosition
-                    local size = child.AbsoluteSize
-                    if pos.X > 0 and pos.Y > 0 then
-                        return child, pos.X + size.X/2, pos.Y + size.Y/2
-                    end
+            if (child:IsA("TextButton") or child:IsA("ImageButton")) and child.Name == buttonName then
+                local pos = child.AbsolutePosition
+                local size = child.AbsoluteSize
+                if pos.X > 0 and pos.Y > 0 then
+                    return child, pos.X + size.X/2, pos.Y + size.Y/2
                 end
             end
             local found, x, y = search(child)
@@ -51,8 +60,8 @@ local function findButton(buttonName, buttonText)
 end
 
 -- НАЖАТИЕ НА КНОПКУ
-local function clickButton(buttonName, buttonText)
-    local btn, x, y = findButton(buttonName, buttonText)
+local function clickButton(buttonName)
+    local btn, x, y = findButton(buttonName)
     if btn and x > 0 and y > 0 then
         tap(x, y)
         return true
@@ -60,45 +69,22 @@ local function clickButton(buttonName, buttonText)
     return false
 end
 
--- ДИАГНОСТИКА: найти все кнопки дропа
-local function findDropButtons()
-    print("🔍 ПОИСК КНОПОК ДРОПА...")
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then print("PlayerGui не найден") return end
-    
-    local function search(container, path)
-        for _, child in ipairs(container:GetChildren()) do
-            if child:IsA("TextButton") or child:IsA("ImageButton") then
-                local text = child.Text or ""
-                if text:lower():find("drop") or text:lower():find("ball") or child.Name:lower():find("drop") then
-                    print("🔘 Найдена: " .. child.Name .. " | Текст: " .. text .. " | Путь: " .. path .. "." .. child.Name)
-                end
-            end
-            search(child, path .. "." .. child.Name)
-        end
-    end
-    search(playerGui, "PlayerGui")
-end
-
--- ====================== СОЗДАНИЕ GUI ======================
+-- ====================== GUI ======================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BrainrotHub"
 screenGui.ResetOnSpawn = false
 
--- ОСНОВНОЕ ОКНО
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 250, 0, 180)
-mainFrame.Position = UDim2.new(0.5, -125, 0.5, -90)
+mainFrame.Size = UDim2.new(0, 250, 0, 160)
+mainFrame.Position = UDim2.new(0.5, -125, 0.5, -80)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 mainFrame.BackgroundTransparency = 0.1
 mainFrame.BorderSizePixel = 0
 
--- СКРУГЛЕНИЕ
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 12)
 corner.Parent = mainFrame
 
--- ЗАГОЛОВОК
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 35)
 title.Text = "🧠 BRAINROT HUB"
@@ -107,7 +93,6 @@ title.BackgroundTransparency = 1
 title.Font = Enum.Font.GothamBold
 title.TextSize = 18
 
--- КНОПКА ЗАКРЫТИЯ
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 30, 0, 30)
 closeBtn.Position = UDim2.new(1, -35, 0, 2)
@@ -120,7 +105,7 @@ local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(0, 8)
 closeCorner.Parent = closeBtn
 
--- ПЕРЕТАСКИВАНИЕ ОКНА
+-- ПЕРЕТАСКИВАНИЕ
 local dragging = false
 local dragStart = nil
 local startPos = nil
@@ -150,7 +135,7 @@ end)
 local btnDrop = Instance.new("TextButton")
 btnDrop.Size = UDim2.new(0, 220, 0, 40)
 btnDrop.Position = UDim2.new(0.5, -110, 0, 45)
-btnDrop.Text = "🔴 AUTO DROP (1 BALL): OFF"
+btnDrop.Text = "🔴 AUTO DROP: OFF"
 btnDrop.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 btnDrop.TextColor3 = Color3.fromRGB(255, 255, 255)
 btnDrop.Font = Enum.Font.Gotham
@@ -171,27 +156,17 @@ local collectCorner = Instance.new("UICorner")
 collectCorner.CornerRadius = UDim.new(0, 8)
 collectCorner.Parent = btnCollect
 
-local btnDiag = Instance.new("TextButton")
-btnDiag.Size = UDim2.new(0, 220, 0, 30)
-btnDiag.Position = UDim2.new(0.5, -110, 0, 145)
-btnDiag.Text = "🔍 FIND DROP BUTTONS"
-btnDiag.BackgroundColor3 = Color3.fromRGB(80, 80, 120)
-btnDiag.TextColor3 = Color3.fromRGB(255, 255, 255)
-btnDiag.Font = Enum.Font.Gotham
-btnDiag.TextSize = 12
+-- ЛОГИКА
+local autoDrop = false
+local autoCollect = false
 
-local diagCorner = Instance.new("UICorner")
-diagCorner.CornerRadius = UDim.new(0, 8)
-diagCorner.Parent = btnDiag
-
--- ЛОГИКА КНОПОК
 btnDrop.MouseButton1Click:Connect(function()
     autoDrop = not autoDrop
     if autoDrop then
-        btnDrop.Text = "🟢 AUTO DROP (1 BALL): ON"
+        btnDrop.Text = "🟢 AUTO DROP: ON"
         btnDrop.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
     else
-        btnDrop.Text = "🔴 AUTO DROP (1 BALL): OFF"
+        btnDrop.Text = "🔴 AUTO DROP: OFF"
         btnDrop.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     end
 end)
@@ -207,16 +182,12 @@ btnCollect.MouseButton1Click:Connect(function()
     end
 end)
 
-btnDiag.MouseButton1Click:Connect(function()
-    findDropButtons()
-end)
-
 closeBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
 -- СБОРКА GUI
-for _, obj in ipairs({mainFrame, title, closeBtn, btnDrop, btnCollect, btnDiag}) do
+for _, obj in ipairs({mainFrame, title, closeBtn, btnDrop, btnCollect}) do
     obj.Parent = screenGui
 end
 mainFrame.Parent = screenGui
@@ -224,32 +195,34 @@ screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ====================== ОСНОВНЫЕ ЦИКЛЫ ======================
 
--- АВТО-ДРОП (по 1 шару)
+-- АВТО-ДРОП (через ремут, если найден)
 task.spawn(function()
     while true do
-        task.wait(dropDelay)
+        task.wait(0.2)  -- 5 шаров в секунду
         if autoDrop then
-            -- Ищем кнопку DropButton или любую кнопку с текстом "Drop"
-            local clicked = clickButton("DropButton", "")
-            if not clicked then
-                clickButton("", "Drop")
+            local success = dropBallViaRemote()
+            if not success then
+                -- Если ремут не работает, используем эмуляцию кнопки
+                clickButton("DropButton")
             end
         end
     end
 end)
 
--- АВТО-СБОР
+-- АВТО-СБОР (пока заглушка, ты скажешь что добавить)
 task.spawn(function()
     while true do
-        task.wait(collectDelay)
+        task.wait(0.5)
         if autoCollect then
-            -- Пробуем QuickStack (сбор ресурсов)
-            local clicked = clickButton("QuickStack", "")
-            if not clicked then
-                clickButton("EquipBest", "")
-            end
+            -- TODO: добавить логику сбора (ты скажешь как)
+            -- clickButton("QuickStack") или другой ремут
         end
     end
 end)
 
-print("✅ Brainrot Hub загружен! Нажми на кнопку 'FIND DROP BUTTONS' для поиска кнопок дропа")
+print("✅ Brainrot Hub загружен!")
+if dropRemote then
+    print("📡 Авто-дроп через ремут:", dropRemote.Name)
+else
+    print("⚠️ Ремут не найден, использую эмуляцию кнопки DropButton")
+end
